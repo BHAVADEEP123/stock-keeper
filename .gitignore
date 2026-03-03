@@ -1,0 +1,52 @@
+# Gradle files
+.gradle/
+build/
+*.apk
+*.aar
+*.ap_
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Output files
+out/
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+
+# Gradle wrapper
+gradle-wrapper.jar
+
+# Maven wrapper
+.mvn/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+*.swp
+*.swo
+*~
+
+# Dependencies
+.gradle
+node_modules/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
