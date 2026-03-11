@@ -4,25 +4,19 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import com.stockkeeper.app.data.db.dao.CategoryDao
+import com.stockkeeper.app.data.db.dao.SectionDao
 import com.stockkeeper.app.data.db.dao.StockDao
-import com.stockkeeper.app.data.db.dao.PriceAlertDao
-import com.stockkeeper.app.data.db.dao.PollingHistoryDao
-import com.stockkeeper.app.data.db.entity.Category
-import com.stockkeeper.app.data.db.entity.Stock
-import com.stockkeeper.app.data.db.entity.PriceAlert
-import com.stockkeeper.app.data.db.entity.PollingHistory
+import com.stockkeeper.app.data.db.entity.SectionEntity
+import com.stockkeeper.app.data.db.entity.StockEntity
 
 @Database(
-    entities = [Category::class, Stock::class, PriceAlert::class, PollingHistory::class],
+    entities = [SectionEntity::class, StockEntity::class],
     version = 1,
     exportSchema = false
 )
 abstract class StockKeeperDatabase : RoomDatabase() {
-    abstract fun categoryDao(): CategoryDao
+    abstract fun sectionDao(): SectionDao
     abstract fun stockDao(): StockDao
-    abstract fun priceAlertDao(): PriceAlertDao
-    abstract fun pollingHistoryDao(): PollingHistoryDao
 
     companion object {
         @Volatile

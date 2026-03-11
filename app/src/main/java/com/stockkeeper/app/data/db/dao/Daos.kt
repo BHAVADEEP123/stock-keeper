@@ -1,86 +1,51 @@
 package com.stockkeeper.app.data.db.dao
 
 import androidx.room.*
-import com.stockkeeper.app.data.db.entity.Category
-import com.stockkeeper.app.data.db.entity.Stock
-import com.stockkeeper.app.data.db.entity.PriceAlert
-import com.stockkeeper.app.data.db.entity.PollingHistory
+import com.stockkeeper.app.data.db.entity.SectionEntity
+import com.stockkeeper.app.data.db.entity.StockEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface CategoryDao {
+interface SectionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertCategory(category: Category): Long
+    suspend fun insertSection(section: SectionEntity): Long
 
     @Update
-    suspend fun updateCategory(category: Category)
+    suspend fun updateSection(section: SectionEntity)
 
     @Delete
-    suspend fun deleteCategory(category: Category)
+    suspend fun deleteSection(section: SectionEntity)
 
-    @Query("SELECT * FROM categories ORDER BY name ASC")
-    fun getAllCategories(): Flow<List<Category>>
+    @Query("SELECT * FROM sections ORDER BY sortOrder ASC, name ASC")
+    fun getAllSections(): Flow<List<SectionEntity>>
 
-    @Query("SELECT * FROM categories WHERE id = :id")
-    suspend fun getCategoryById(id: Int): Category?
+    @Query("SELECT * FROM sections WHERE id = :id")
+    suspend fun getSectionById(id: Int): SectionEntity?
 }
 
 @Dao
 interface StockDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertStock(stock: Stock): Long
-
+    suspend fun insertStock(stock: StockEntity): Long
+    
     @Update
-    suspend fun updateStock(stock: Stock)
-
+    suspend fun updateStock(stock: StockEntity)
+    
     @Delete
-    suspend fun deleteStock(stock: Stock)
-
-    @Query("SELECT * FROM stocks WHERE categoryId = :categoryId ORDER BY name ASC")
-    fun getStocksByCategory(categoryId: Int): Flow<List<Stock>>
-
+    suspend fun deleteStock(stock: StockEntity)
+    
+    @Query("SELECT * FROM stocks WHERE sectionId = :sectionId ORDER BY displayName ASC, symbol ASC")
+    fun getStocksBySection(sectionId: Int): Flow<List<StockEntity>>
+    
     @Query("SELECT * FROM stocks WHERE id = :id")
-    suspend fun getStockById(id: Int): Stock?
+    suspend fun getStockById(id: Int): StockEntity?
 
     @Query("SELECT * FROM stocks ORDER BY name ASC")
-    fun getAllStocks(): Flow<List<Stock>>
+    fun getAllStocks(): Flow<List<StockEntity>>
 
-    @Query("SELECT * FROM stocks WHERE notificationEnabled = 1")
-    suspend fun getStocksWithNotificationsEnabled(): List<Stock>
-}
-
-@Dao
-interface PriceAlertDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAlert(alert: PriceAlert): Long
-
-    @Update
-    suspend fun updateAlert(alert: PriceAlert)
-
-    @Delete
-    suspend fun deleteAlert(alert: PriceAlert)
-
-    @Query("SELECT * FROM price_alerts WHERE stockId = :stockId")
-    fun getAlertsByStock(stockId: Int): Flow<List<PriceAlert>>
-
-    @Query("SELECT * FROM price_alerts WHERE stockId = :stockId AND isTriggered = 0")
-    suspend fun getActiveAlertsByStock(stockId: Int): List<PriceAlert>
-
-    @Query("SELECT * FROM price_alerts WHERE isTriggered = 0")
-    suspend fun getAllActiveAlerts(): List<PriceAlert>
-}
-
-@Dao
-interface PollingHistoryDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPollingRecord(history: PollingHistory): Long
-
-    @Query("SELECT * FROM polling_history WHERE stockId = :stockId ORDER BY timestamp DESC")
-    suspend fun getPollingHistoryByStock(stockId: Int): List<PollingHistory>
-
-    @Query("SELECT * FROM polling_history ORDER BY timestamp DESC LIMIT 100")
-    suspend fun getRecentPollingHistory(): List<PollingHistory>
-
-    @Query("DELETE FROM polling_history WHERE timestamp < :olderThanTimestamp")
-    suspend fun deleteOldRecords(olderThanTimestamp: Long)
+    @Query("SELECT * FROM stocks WHERE isActive = 1")
+    suspend fun getActiveStocks(): List<StockEntity>
+    
+    @Query("SELECT * FROM stocks WHERE isActive = 1 AND alertPrice IS NOT NULL")
+    suspend fun getStocksWithActiveAlerts(): List<StockEntity>
 }

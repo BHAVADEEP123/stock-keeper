@@ -1,16 +1,17 @@
 package com.stockkeeper.app.worker
 
 import android.content.Context
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
-import androidx.work.WorkerParameters
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import com.stockkeeper.app.data.api.RetrofitClient
 import com.stockkeeper.app.data.db.StockKeeperDatabase
 import com.stockkeeper.app.data.repository.StockRepository
 import com.stockkeeper.app.notification.NotificationManager
-import com.stockkeeper.app.utils.NetworkUtils
 import java.util.concurrent.TimeUnit
 
 class PricePollingWorker(
@@ -25,79 +26,36 @@ class PricePollingWorker(
             val apiService = RetrofitClient.getStockApiService()
             val stockRepository = StockRepository(
                 database.stockDao(),
-                database.priceAlertDao(),
-                database.pollingHistoryDao(),
                 apiService
             )
-
-            val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
-
-            if (!isNetworkAvailable) {
-                // Network is offline, retry later
-                return Result.retry()
-            }
-
-            // Get all stocks with notifications enabled
-            val stocks = stockRepository.getStocksWithNotificationsEnabled()
+            // Get all active stocks
+            val stocks = stockRepository.getActiveStocks()
 
             stocks.forEach { stock ->
-                try {
-                    val price = stockRepository.fetchStockPrice(stock.symbol)
-                    
-                    if (price != null) {
-                        // Update stock price
-                        val updatedStock = stock.copy(currentPrice = price)
-                        stockRepository.updateStock(updatedStock)
-                        
-                        // Record polling history
-                        stockRepository.recordPollingHistory(
-                            stock.id,
-                            price,
-                            "SUCCESS"
-                        )
+                val price = stockRepository.fetchStockPrice(stock.symbol)
 
-                        // Check if any alerts should trigger
-                        val activeAlerts = stockRepository.getActiveAlerts()
-                        activeAlerts.forEach { alert ->
-                            if (alert.stockId == stock.id) {
-                                val shouldTrigger = when (alert.alertType) {
-                                    "ABOVE" -> price >= alert.triggerPrice
-                                    "BELOW" -> price <= alert.triggerPrice
-                                    else -> false
-                                }
-
-                                if (shouldTrigger) {
-                                    // Send notification
-                                    NotificationManager.showPriceAlertNotification(
-                                        context,
-                                        stock,
-                                        price,
-                                        alert
-                                    )
-                                    
-                                    // Mark alert as triggered
-                                    val triggeredAlert = alert.copy(
-                                        isTriggered = true,
-                                        triggeredAt = System.currentTimeMillis()
-                                    )
-                                    stockRepository.updateAlert(triggeredAlert)
-                                }
-                            }
-                        }
-                    } else {
-                        // Failed to fetch price
-                        stockRepository.recordPollingHistory(
-                            stock.id,
-                            0.0,
-                            "FAILED"
-                        )
-                    }
-                } catch (e: Exception) {
-                    stockRepository.recordPollingHistory(
-                        stock.id,
-                        0.0,
-                        "FAILED"
+                if (price != null) {
+                    val updatedStock = stock.copy(
+                        previousPrice = stock.latestPrice,
+                        latestPrice = price,
+                        lastUpdated = System.currentTimeMillis()
                     )
+                    stockRepository.updateStock(updatedStock)
+
+                    if (updatedStock.alertPrice != null && updatedStock.alertDirection != null) {
+                        val shouldTrigger = when (updatedStock.alertDirection) {
+                            "ABOVE" -> updatedStock.latestPrice >= updatedStock.alertPrice
+                            "BELOW" -> updatedStock.latestPrice <= updatedStock.alertPrice
+                            else -> false
+                        }
+
+                        if (shouldTrigger) {
+                            NotificationManager.showPriceAlertNotification(
+                                context,
+                                updatedStock
+                            )
+                        }
+                    }
                 }
             }
 
@@ -112,9 +70,15 @@ class PricePollingWorker(
         const val POLLING_WORK_NAME = "stock_price_polling"
 
         fun schedulePeriodicPolling(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+
             val pollingWork = PeriodicWorkRequestBuilder<PricePollingWorker>(
-                5, TimeUnit.MINUTES // Poll every 5 minutes
-            ).build()
+                30, TimeUnit.MINUTES // Poll every 30 minutes
+            )
+                .setConstraints(constraints)
+                .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 POLLING_WORK_NAME,

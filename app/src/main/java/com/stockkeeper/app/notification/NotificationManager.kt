@@ -7,8 +7,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.stockkeeper.app.R
-import com.stockkeeper.app.data.db.entity.PriceAlert
-import com.stockkeeper.app.data.db.entity.Stock
+import com.stockkeeper.app.data.db.entity.StockEntity
 import com.stockkeeper.app.ui.MainActivity
 import kotlin.random.Random
 
@@ -31,9 +30,7 @@ object NotificationManager {
 
     fun showPriceAlertNotification(
         context: Context,
-        stock: Stock,
-        currentPrice: Double,
-        alert: PriceAlert
+        stock: StockEntity
     ) {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -47,9 +44,9 @@ object NotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val alertType = if (alert.alertType == "ABOVE") "above" else "below"
-        val title = "${stock.name} (${stock.symbol})"
-        val message = "Price is now $currentPrice, which is $alertType your target of ${alert.triggerPrice}"
+        val alertType = if (stock.alertDirection == "ABOVE") "above" else "below"
+        val title = "${stock.displayName.ifBlank { stock.symbol }} (${stock.exchange})"
+        val message = "Price is now ${stock.latestPrice}, which is $alertType your target of ${stock.alertPrice}"
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
