@@ -40,7 +40,7 @@ interface StockDao {
     @Query("SELECT * FROM stocks WHERE id = :id")
     suspend fun getStockById(id: Int): StockEntity?
 
-    @Query("SELECT * FROM stocks ORDER BY name ASC")
+    @Query("SELECT * FROM stocks ORDER BY displayName ASC, symbol ASC")
     fun getAllStocks(): Flow<List<StockEntity>>
 
     @Query("SELECT * FROM stocks WHERE isActive = 1")
