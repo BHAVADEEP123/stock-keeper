@@ -44,7 +44,7 @@ class PricePollingWorker(
 
             scheduleNext(applicationContext)
             Result.success()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             scheduleNext(applicationContext)
             Result.failure()
         }

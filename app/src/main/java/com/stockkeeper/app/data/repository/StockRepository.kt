@@ -18,20 +18,32 @@ class StockRepository(
     val priceHistoryDao: PriceHistoryDao,
     private val apiService: StockApiService
 ) {
-    // ── Sections ─────────────────────────────────────────────────────────────
+
+    // ── Sections ──────────────────────────────────────────────────────────────
     fun getSections(): Flow<List<SectionEntity>> = sectionDao.getAll()
+
     suspend fun insertSection(s: SectionEntity): Long = sectionDao.insert(s)
+
     suspend fun updateSection(s: SectionEntity) = sectionDao.update(s)
+
     suspend fun deleteSection(s: SectionEntity) = sectionDao.delete(s)
+
     suspend fun getSectionById(id: Int): SectionEntity? = sectionDao.getById(id)
 
     // ── Stocks ────────────────────────────────────────────────────────────────
-    fun getStocksBySection(sectionId: Int): Flow<List<StockEntity>> = stockDao.getBySection(sectionId)
+    fun getStocksBySection(sectionId: Int): Flow<List<StockEntity>> =
+        stockDao.getBySection(sectionId)
+
     fun getStockByIdFlow(id: Int): Flow<StockEntity?> = stockDao.getByIdFlow(id)
+
     suspend fun getStockById(id: Int): StockEntity? = stockDao.getById(id)
+
     suspend fun insertStock(s: StockEntity): Long = stockDao.insert(s)
+
     suspend fun updateStock(s: StockEntity) = stockDao.update(s)
+
     suspend fun deleteStock(s: StockEntity) = stockDao.delete(s)
+
     suspend fun getActiveStocks(): List<StockEntity> = stockDao.getActive()
 
     // ── Price history ─────────────────────────────────────────────────────────
@@ -45,7 +57,7 @@ class StockRepository(
     suspend fun purgeOldHistory() = priceHistoryDao.purgeOld(today())
 
     // ── Yahoo Finance API ─────────────────────────────────────────────────────
-    // NSE symbols: SYMBOL.NS  |  BSE symbols: SYMBOL.BO
+    // NSE -> SYMBOL.NS  |  BSE -> SYMBOL.BO
     private fun yahooSymbol(symbol: String, exchange: String): String =
         when (exchange.uppercase()) {
             "NSE" -> "${symbol.uppercase()}.NS"
@@ -53,23 +65,38 @@ class StockRepository(
             else  -> symbol.uppercase()
         }
 
-    suspend fun fetchCurrentPrice(symbol: String, exchange: String): Double? =
-        try {
-            val resp = apiService.getQuote(yahooSymbol(symbol, exchange), interval = "1d", range = "1d")
+    suspend fun fetchCurrentPrice(symbol: String, exchange: String): Double? {
+        return try {
+            val resp = apiService.getQuote(
+                yahooSymbol(symbol, exchange),
+                interval = "1d",
+                range = "1d"
+            )
             resp.chart.result?.firstOrNull()?.meta?.regularMarketPrice?.takeIf { it > 0 }
-        } catch (_: Exception) { null }
+        } catch (e: Exception) {
+            null
+        }
+    }
 
-    suspend fun fetchIntradayPrices(symbol: String, exchange: String): List<Pair<Long, Double>> =
-        try {
-            val resp = apiService.getQuote(yahooSymbol(symbol, exchange), interval = "5m", range = "1d")
+    suspend fun fetchIntradayPrices(symbol: String, exchange: String): List<Pair<Long, Double>> {
+        return try {
+            val resp = apiService.getQuote(
+                yahooSymbol(symbol, exchange),
+                interval = "5m",
+                range = "1d"
+            )
             val result = resp.chart.result?.firstOrNull() ?: return emptyList()
             val timestamps = result.timestamp ?: return emptyList()
             val closes = result.indicators?.quote?.firstOrNull()?.close ?: return emptyList()
             timestamps.zip(closes)
                 .filter { (_, p) -> p != null && p > 0 }
                 .map { (ts, p) -> Pair(ts * 1000L, p!!) }
-        } catch (_: Exception) { emptyList() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
 
     // ── Utils ─────────────────────────────────────────────────────────────────
-    private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    private fun today(): String =
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 }

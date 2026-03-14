@@ -20,7 +20,7 @@ class DailyCleanupWorker(
                 RetrofitClient.getStockApiService()
             ).purgeOldHistory()
             Result.success()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             Result.failure()
         }
     }
