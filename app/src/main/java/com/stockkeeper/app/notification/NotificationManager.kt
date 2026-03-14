@@ -11,68 +11,51 @@ import com.stockkeeper.app.data.db.entity.StockEntity
 import com.stockkeeper.app.ui.MainActivity
 import kotlin.random.Random
 
-object NotificationManager {
-    private const val CHANNEL_ID = "stock_alerts"
-    private const val CHANNEL_NAME = "Stock Price Alerts"
-    private const val CHANNEL_DESCRIPTION = "Notifications for stock price alerts"
+object StockNotificationManager {
+    private const val CHANNEL_ID   = "stock_alarms"
+    private const val CHANNEL_NAME = "Stock Price Alarms"
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val importance = android.app.NotificationManager.IMPORTANCE_HIGH
-            val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
-                description = CHANNEL_DESCRIPTION
-            }
-            val notificationManager: android.app.NotificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            notificationManager.createNotificationChannel(channel)
+            val channel = NotificationChannel(
+                CHANNEL_ID, CHANNEL_NAME,
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            ).apply { description = "Triggered when a stock hits your target price" }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE)
+                    as android.app.NotificationManager).createNotificationChannel(channel)
         }
     }
 
-    fun showPriceAlertNotification(
-        context: Context,
-        stock: StockEntity
-    ) {
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+    fun showAlarmNotification(context: Context, stock: StockEntity) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE)
+                as android.app.NotificationManager
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra("stock_id", stock.id)
         }
-        val pendingIntent: PendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
+        val pi = PendingIntent.getActivity(
+            context, stock.id, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val alertType = if (stock.alertDirection == "ABOVE") "above" else "below"
-        val title = "${stock.displayName.ifBlank { stock.symbol }} (${stock.exchange})"
-        val message = "Price is now ${stock.latestPrice}, which is $alertType your target of ${stock.alertPrice}"
+        val name   = stock.displayName.ifBlank { stock.symbol }
+        val action = if (stock.alarmType == "BUY") "BUY opportunity" else "SELL opportunity"
+        val price  = "₹%.2f".format(stock.latestPrice)
+        val target = "₹%.2f".format(stock.alarmPrice ?: 0.0)
+        val body   = "${stock.exchange}: $price has reached your $action target of $target"
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .build()
-
-        notificationManager.notify(Random.nextInt(), notification)
-    }
-
-    @Suppress("unused")
-    fun showSyncNotification(context: Context, message: String) {
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Stock Keeper")
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(Random.nextInt(), notification)
+        nm.notify(
+            Random.nextInt(),
+            NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle("$name — $action")
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(pi)
+                .build()
+        )
     }
 }

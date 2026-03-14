@@ -2,44 +2,45 @@ package com.stockkeeper.app.data.api
 
 import com.google.gson.annotations.SerializedName
 import retrofit2.http.GET
+import retrofit2.http.Path
 import retrofit2.http.Query
 
-// Response models
-data class StockPriceResponse(
-    @SerializedName("symbol")
-    val symbol: String,
-    @SerializedName("price")
-    val price: Double,
-    @SerializedName("currency")
-    val currency: String = "USD",
-    @SerializedName("timestamp")
-    val timestamp: Long = System.currentTimeMillis()
+data class YahooFinanceResponse(
+    @SerializedName("chart") val chart: YahooChart
 )
 
-data class StockQuoteResponse(
-    @SerializedName("global_quote")
-    val quote: QuoteData
+data class YahooChart(
+    @SerializedName("result") val result: List<YahooResult>?,
+    @SerializedName("error") val error: Any?
 )
 
-data class QuoteData(
-    @SerializedName("01. symbol")
-    val symbol: String,
-    @SerializedName("05. price")
-    val price: String
+data class YahooResult(
+    @SerializedName("meta") val meta: YahooMeta,
+    @SerializedName("timestamp") val timestamp: List<Long>?,
+    @SerializedName("indicators") val indicators: YahooIndicators?
 )
 
-// API Interface
+data class YahooMeta(
+    @SerializedName("symbol") val symbol: String,
+    @SerializedName("regularMarketPrice") val regularMarketPrice: Double = 0.0,
+    @SerializedName("previousClose") val previousClose: Double = 0.0,
+    @SerializedName("currency") val currency: String = "INR"
+)
+
+data class YahooIndicators(
+    @SerializedName("quote") val quote: List<YahooQuote>?
+)
+
+data class YahooQuote(
+    @SerializedName("close") val close: List<Double?>?
+)
+
 interface StockApiService {
-    @GET("query")
-    suspend fun getStockPrice(
-        @Query("symbol") symbol: String,
-        @Query("function") function: String = "GLOBAL_QUOTE",
-        @Query("apikey") apiKey: String = "demo" // Replace with real API key
-    ): StockQuoteResponse
-
-    @GET("quote")
-    suspend fun getMultiplePrices(
-        @Query("symbols") symbols: String,
-        @Query("apikey") apiKey: String = "demo"
-    ): List<StockPriceResponse>
+    // interval: 1d for current price, 5m for intraday
+    @GET("v8/finance/chart/{symbol}")
+    suspend fun getQuote(
+        @Path("symbol") symbol: String,
+        @Query("interval") interval: String = "1d",
+        @Query("range") range: String = "1d"
+    ): YahooFinanceResponse
 }

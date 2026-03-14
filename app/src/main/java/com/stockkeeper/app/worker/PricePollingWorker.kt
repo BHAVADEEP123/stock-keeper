@@ -1,17 +1,11 @@
 package com.stockkeeper.app.worker
 
 import android.content.Context
-import androidx.work.Constraints
-import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.WorkerParameters
+import androidx.work.*
 import com.stockkeeper.app.data.api.RetrofitClient
 import com.stockkeeper.app.data.db.StockKeeperDatabase
 import com.stockkeeper.app.data.repository.StockRepository
-import com.stockkeeper.app.notification.NotificationManager
+import com.stockkeeper.app.notification.StockNotificationManager
 import java.util.concurrent.TimeUnit
 
 class PricePollingWorker(
@@ -21,74 +15,67 @@ class PricePollingWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            val context = applicationContext
-            val database = StockKeeperDatabase.getInstance(context)
-            val apiService = RetrofitClient.getStockApiService()
-            val stockRepository = StockRepository(
-                database.stockDao(),
-                apiService
+            val db = StockKeeperDatabase.getInstance(applicationContext)
+            val repo = StockRepository(
+                db.sectionDao(), db.stockDao(), db.priceHistoryDao(),
+                RetrofitClient.getStockApiService()
             )
-            // Get all active stocks
-            val stocks = stockRepository.getActiveStocks()
 
+            val stocks = repo.getActiveStocks()
             stocks.forEach { stock ->
-                val price = stockRepository.fetchStockPrice(stock.symbol)
+                val price = repo.fetchCurrentPrice(stock.symbol, stock.exchange) ?: return@forEach
+                db.stockDao().updatePrice(stock.id, price, stock.latestPrice, System.currentTimeMillis())
+                repo.recordPrice(stock.id, price)
 
-                if (price != null) {
-                    val updatedStock = stock.copy(
-                        previousPrice = stock.latestPrice,
-                        latestPrice = price,
-                        lastUpdated = System.currentTimeMillis()
-                    )
-                    stockRepository.updateStock(updatedStock)
-
-                    if (updatedStock.alertPrice != null && updatedStock.alertDirection != null) {
-                        val shouldTrigger = when (updatedStock.alertDirection) {
-                            "ABOVE" -> updatedStock.latestPrice >= updatedStock.alertPrice
-                            "BELOW" -> updatedStock.latestPrice <= updatedStock.alertPrice
-                            else -> false
-                        }
-
-                        if (shouldTrigger) {
-                            NotificationManager.showPriceAlertNotification(
-                                context,
-                                updatedStock
-                            )
-                        }
+                if (stock.alarmEnabled && stock.alarmPrice != null) {
+                    val triggered = when (stock.alarmType) {
+                        "BUY"  -> price <= stock.alarmPrice
+                        "SELL" -> price >= stock.alarmPrice
+                        else   -> false
+                    }
+                    if (triggered) {
+                        StockNotificationManager.showAlarmNotification(
+                            applicationContext,
+                            stock.copy(latestPrice = price)
+                        )
                     }
                 }
             }
 
+            scheduleNext(applicationContext)
             Result.success()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Result.retry()
+        } catch (_: Exception) {
+            scheduleNext(applicationContext)
+            Result.failure()
         }
     }
 
     companion object {
-        const val POLLING_WORK_NAME = "stock_price_polling"
+        private const val WORK_NAME = "price_polling"
 
-        fun schedulePeriodicPolling(context: Context) {
+        /** WorkManager minimum is 15 min for periodic work.
+         *  We use self-chaining OneTimeWorkRequests to achieve ~5-min polling. */
+        fun scheduleNext(context: Context) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-
-            val pollingWork = PeriodicWorkRequestBuilder<PricePollingWorker>(
-                30, TimeUnit.MINUTES // Poll every 30 minutes
-            )
+            val work = OneTimeWorkRequestBuilder<PricePollingWorker>()
+                .setInitialDelay(5, TimeUnit.MINUTES)
                 .setConstraints(constraints)
                 .build()
-
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                POLLING_WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                pollingWork
-            )
+            WorkManager.getInstance(context)
+                .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, work)
         }
 
-        fun cancelPolling(context: Context) {
-            WorkManager.getInstance(context).cancelUniqueWork(POLLING_WORK_NAME)
+        fun startNow(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+            val work = OneTimeWorkRequestBuilder<PricePollingWorker>()
+                .setConstraints(constraints)
+                .build()
+            WorkManager.getInstance(context)
+                .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, work)
         }
     }
 }
